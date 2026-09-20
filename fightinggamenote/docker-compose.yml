@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: fightinggamenote-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fgn
+      POSTGRES_PASSWORD: fgn_local_dev
+      POSTGRES_DB: fightinggamenote
+    ports:
+      - "5432:5432"
+    volumes:
+      - fgn_pg_data:/var/lib/postgresql/data
+
+volumes:
+  fgn_pg_data:
