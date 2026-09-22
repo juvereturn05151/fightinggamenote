@@ -67,6 +67,8 @@ thumbnail_url text
 status        enum(uploading, processing, ready, failed)
 mistake_note  text        -- author's own "what I got wrong" annotation
 created_at    timestamptz
+storage_key   text, nullable Server-generated filename for a locally stored video.
+original_filename text, nullable Original filename of the video uploaded by the user.
 ```
 
 ### Comment

@@ -23,6 +23,27 @@ async function request(path, { method = 'GET', body, getToken } = {}) {
   return res.json();
 }
 
+async function uploadVideo(noteId, file, getToken) {
+  const token = await getToken();
+  const formData = new FormData();
+  formData.append('video', file);
+
+  const res = await fetch(`${API_URL}/notes/${noteId}/videos`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Video upload failed');
+  }
+
+  return res.json();
+}
+
 export const api = {
   listGames: () => request('/games'),
   listCharacters: (gameSlug) => request(`/games/${gameSlug}/characters`),
@@ -41,4 +62,5 @@ export const api = {
   listComments: (type, id) => request(`/comments?type=${type}&id=${id}`),
   createComment: (comment, getToken) =>
     request('/comments', { method: 'POST', body: comment, getToken }),
+  uploadVideo,
 };

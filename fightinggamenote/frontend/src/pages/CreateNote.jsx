@@ -16,6 +16,7 @@ export default function CreateNote() {
   const [tags, setTags] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState(null);
 
   useEffect(() => {
     api.listGames().then(setGames);
@@ -55,6 +56,9 @@ export default function CreateNote() {
         },
         getToken
       );
+      if (selectedVideo) {
+        await api.uploadVideo(id, selectedVideo, getToken);
+      }
       navigate(`/notes/${id}`);
     } catch (err) {
       setError(err.message);
@@ -99,7 +103,7 @@ export default function CreateNote() {
         Title
         <input value={title} onChange={(e) => setTitle(e.target.value)} />
       </label>
-
+          
       <label>
         Notes / combo
         <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
@@ -109,7 +113,14 @@ export default function CreateNote() {
         Tags (comma-separated)
         <input value={tags} onChange={(e) => setTags(e.target.value)} />
       </label>
-
+      <label>
+        Video (optional)
+        <input
+          type="file"
+          accept="video/mp4,video/webm"
+          onChange={(e) => setSelectedVideo(e.target.files?.[0] ?? null)}
+        />
+      </label>
       {error && <p className="error">{error}</p>}
 
       <button type="submit" disabled={submitting}>
