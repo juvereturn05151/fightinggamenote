@@ -73,7 +73,7 @@ router.post('/', requireAuth(), syncUser, async (req, res) => {
 
   const { rows } = await pool.query(
     `INSERT INTO notes (user_id, game_id, character_id, title, body, tags, visibility)
-     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 'public'))
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 'public')::note_visibility)
      RETURNING id`,
     [
       req.dbUser.id,
