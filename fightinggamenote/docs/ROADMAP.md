@@ -12,6 +12,8 @@ separate debugging problems.
       auth (email/password or JWT)
 - [ ] Frontend: note feed, note detail, create/edit note form — **no video
       yet**
+- [x] Private-by-default notes, public feed, owner-only My Notes, and
+      owner-controlled visibility changes
 - [ ] Game/Character seed data for at least one game, to unblock note
       creation
 - **Exit criteria**: can create an account, create a standalone note
@@ -19,17 +21,17 @@ separate debugging problems.
 
 ## Phase 2 — Video, still local
 
-- [ ] Local file upload (disk storage is fine for now) wired into the
-      note-creation flow
-- [ ] Video detail view: player, "what I got wrong" annotation field,
-      comment thread
-- **Exit criteria**: can attach a video to a note and see it play back,
-  locally, no S3 yet.
+- [x] YouTube URL attachment wired into the note-creation flow; legacy local
+      uploads remain playable
+- [x] Video detail view with a single note-level comment thread
+- **Exit criteria**: can attach a YouTube video to a note and see it play back,
+  locally, while existing local uploads continue to work.
 
 ## Phase 3 — Move to AWS (see `docs/ARCHITECTURE.md` for details)
 
 - [ ] RDS Postgres, cut over from local DB
-- [ ] S3 + IAM presigned upload flow, cut over from local disk storage
+- [ ] Validate YouTube embedding in the deployed environment; no S3 upload
+      infrastructure is needed for the current video approach
 - [ ] Backend deployed (Elastic Beanstalk)
 - [ ] Frontend deployed (Amplify / S3+CloudFront)
 - [ ] Auth wired against deployed app (Cognito or alternative)
@@ -38,6 +40,7 @@ separate debugging problems.
 
 ## Phase 4 — Community/moderation polish
 
+- [x] Public Note/Comment likes with permanent lifetime reputation awards
 - [ ] Report button + basic admin review/hide flow
 - [ ] Video thumbnail generation (Lambda+MediaConvert, or simpler
       client-side generation as v1)

@@ -1,17 +1,22 @@
 # FightingGameNote
 
 A web app for fighting game players to log training notes (combos,
-setups) per game and character, attach optional replay video with
-self-annotated mistakes, and get feedback from other players via
-comments.
+setups) per game and character, attach an optional replay video, and get
+feedback from other players in the note-level comment thread.
+
+Notes are private by default. Their creator can publish them to the public
+feed, return them to private later, and see both kinds together in My Notes.
+Players earn permanent lifetime reputation when other users like their public
+notes and comments; removing or repeating a like cannot remove or duplicate an
+award.
 
 Full design context: `docs/SCHEMA.md`, `docs/ARCHITECTURE.md`,
 `docs/ROADMAP.md`. If you're a coding agent, read `AGENTS.md` first.
 
 ## Status
 
-**Phase 1 in progress** — local dev, no video/S3 yet. See
-`docs/ROADMAP.md` for the current checklist.
+**Phase 2 in progress** — local development with YouTube replay embeds and
+legacy local-video playback. See `docs/ROADMAP.md` for the current checklist.
 
 ## Stack
 
@@ -59,8 +64,8 @@ comment.
 
 ## What's not built yet
 
-- Video upload (Phase 2) — the note detail page has a placeholder
-  comment marking where the player + "what I got wrong" annotation goes
+- Direct uploads for new replay attachments — new videos are hosted by
+  YouTube and attached by URL
 - Any AWS deployment (Phase 3) — everything above is local-only
 - Moderation / reporting (Phase 4)
 

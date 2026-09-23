@@ -8,6 +8,7 @@ import { router as gamesRouter } from './routes/games.js';
 import { router as notesRouter } from './routes/notes.js';
 import { router as commentsRouter } from './routes/comments.js';
 import { router as videosRouter } from './routes/videos.js';
+import { router as likesRouter } from './routes/likes.js';
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/games', gamesRouter);
 app.use('/notes', notesRouter);
 app.use('/comments', commentsRouter);
 app.use('/', videosRouter);
+app.use('/', likesRouter);
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {

@@ -1,7 +1,7 @@
 # Data schema
 
-Status: draft, not yet implemented. Field types are indicative (Postgres),
-adjust during migration authoring.
+Status: implemented as PostgreSQL migrations. Keep this document and new
+migrations in sync.
 
 ## Entities
 
@@ -43,7 +43,7 @@ character_id    uuid FK -> Character
 title           text
 body            text        -- combo/setup notation, free text
 tags            text[]      -- e.g. ["punish", "corner"]
-visibility      enum(public, private)
+visibility      enum(public, private) -- application default: private
 created_at      timestamptz
 updated_at      timestamptz
 ```
@@ -55,6 +55,12 @@ This is a deliberate denormalization:
 
 A Note does **not** require a video. Video is an optional attachment.
 
+New Notes default to `private`. Private Notes and their video metadata and
+comments are readable only by their creator. Public Notes appear in the public
+feed and may be read by anyone; signed-in users may comment. The owner may
+switch either direction after creation. Existing records retain their current
+visibility.
+
 ### Video
 ```
 id            uuid PK
@@ -65,11 +71,31 @@ cdn_url       text
 duration_sec  integer
 thumbnail_url text
 status        enum(uploading, processing, ready, failed)
-mistake_note  text        -- author's own "what I got wrong" annotation
+mistake_note  text        -- legacy, nullable; retained but unused by the application
 created_at    timestamptz
 storage_key   text, nullable Server-generated filename for a locally stored video.
 original_filename text, nullable Original filename of the video uploaded by the user.
+youtube_video_id text, nullable Canonical 11-character YouTube video ID.
 ```
+
+New replay attachments use YouTube as the hosting platform. The application
+accepts a supported YouTube URL, validates its hostname and shape on the
+backend, and stores only `youtube_video_id`. The frontend constructs the embed
+URL from that ID; arbitrary embed URLs, iframe markup, and scripts are never
+stored. YouTube public and unlisted videos can be embedded when the uploader
+allows embedding. YouTube visibility remains independent of Note visibility;
+in particular, an unlisted YouTube video is not private.
+
+`storage_key` and `original_filename` remain in place for legacy local uploads.
+Their files and streaming route are retained during the transition. The S3/CDN
+columns also remain unchanged for schema compatibility, but the YouTube flow
+does not download a video, proxy video bytes, or use S3. A Video belongs to the
+same user and Note ownership model regardless of storage type, and a Note can
+still have multiple Video rows.
+
+`mistake_note` is retained solely to preserve existing records. The application
+does not return, display, or update it; replay discussion belongs in the
+Note-level comment thread.
 
 ### Comment
 ```
@@ -86,6 +112,54 @@ DB-constraint-safe (Postgres can't FK-enforce it). Alternative: separate
 `NoteComment` / `VideoComment` tables — more boilerplate, referentially
 safe. Currently favoring polymorphic since it's the more common
 real-world pattern to practice with.
+
+### NoteLike
+```
+user_id     uuid FK -> User
+note_id     uuid FK -> Note
+created_at  timestamptz
+PK (user_id, note_id)
+```
+Represents the current active like. Only public Notes can receive new likes,
+and authors cannot like their own Notes. Removing this row does not remove a
+previous reputation award.
+
+### CommentLike
+```
+user_id     uuid FK -> User
+comment_id  uuid FK -> Comment
+created_at  timestamptz
+PK (user_id, comment_id)
+```
+Represents the current active like on a Note comment or reply. New likes are
+allowed only while the parent Note is public, and comment authors cannot like
+their own comments.
+
+### ReputationAward
+```
+id                 uuid PK
+recipient_user_id  uuid FK -> User
+awarder_user_id    uuid       -- immutable user-id snapshot
+award_type         enum(note_like, comment_like)
+item_id            uuid       -- immutable Note/Comment id snapshot
+points             smallint   -- 10 for Note, 5 for Comment
+created_at         timestamptz
+unique (awarder_user_id, award_type, item_id)
+```
+Lifetime reputation is calculated only from this append-only ledger, never
+from active-like counts. Like creation and award insertion happen in one
+transaction. The unique ledger key prevents repeated or concurrent requests,
+including unlike/relike cycles, from awarding twice.
+
+Deletion and moderation policy:
+
+- Deleting a Note or Comment removes its active likes through foreign-key
+  cascades; its reputation awards remain as historical achievements.
+- Making a Note private or applying a moderation action prevents new likes but
+  does not change active-like history or earned awards.
+- Deleting an awarder's account leaves their UUID snapshot in awards earned by
+  other users. Deleting the recipient account removes that account's ledger,
+  because there is no longer a profile on which to display reputation.
 
 ### Report (moderation)
 ```

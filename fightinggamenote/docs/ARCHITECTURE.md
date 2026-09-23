@@ -9,30 +9,46 @@ added, not for minimizing services touched.
 | Concern           | Service                                  | Notes |
 |--------------------|-------------------------------------------|-------|
 | Database           | RDS (PostgreSQL)                          | Start local via Docker, migrate to RDS in Phase 3 |
-| Video storage       | S3                                        | Direct browser-to-S3 upload via presigned URLs |
-| Video delivery       | CloudFront (in front of S3)             | CDN for playback |
-| Video processing (later) | Lambda + MediaConvert, or client-side thumbnailing as a simpler v1 | Not required for MVP |
-| Auth                | Cognito (or Clerk/Auth0 as a simpler alternative) | Undecided — see README |
+| Video hosting       | YouTube                                    | New replays are attached by URL; only the validated video ID is stored |
+| Video delivery      | YouTube embed player                       | Embed URL is constructed by the frontend from the stored ID |
+| Legacy video storage | Local disk                                | Existing uploads and streaming route remain available during transition |
+| Auth                | Clerk                                      | Backend uses `requireAuth()` then `syncUser` for authenticated writes |
 | Backend hosting     | Elastic Beanstalk (MVP), ECS Fargate (later if wanted) | EB is the gentler on-ramp |
 | Frontend hosting    | Amplify Hosting, or S3 + CloudFront directly | Amplify wraps the S3+CloudFront setup |
 | IAM                 | Scoped role/policy for presigned S3 uploads | Backend generates presigned URLs, never routes video bytes through the app server |
 
-## Upload flow (video)
+## YouTube attachment flow (video)
 
-1. Frontend requests a presigned upload URL from the backend API
-   (`POST /videos/presign`), passing content-type/filename.
-2. Backend generates a presigned S3 PUT URL (scoped, short-lived) and
-   returns it, along with the eventual `s3_key`.
-3. Frontend uploads the video file directly to S3 using that URL —
-   the video bytes never pass through the app server.
-4. Frontend notifies the backend the upload is complete
-   (`POST /videos/:id/complete`), backend marks `Video.status = ready`
-   (or triggers processing if thumbnailing/transcoding is added later).
-5. Playback reads from CloudFront, not directly from S3.
+1. The player creates a Note, optionally providing a YouTube replay URL.
+2. The frontend calls the authenticated attachment endpoint for that Note.
+3. The backend verifies Note ownership, strictly validates the YouTube host
+   and URL shape, extracts the canonical video ID, and stores only that ID.
+4. The note detail page constructs a `youtube-nocookie.com/embed/<id>` URL
+   from the stored ID. The app never accepts iframe HTML or downloads,
+   proxies, or uploads the YouTube video bytes.
 
-This is the core "practice AWS" piece of the whole project — avoiding
-routing video through the app server is what makes it a real
-cloud-storage exercise rather than a toy file upload.
+Existing local-video records, files, upload middleware, and byte-range
+streaming route are retained for compatibility until a separate migration
+review is performed. YouTube visibility is independent of Note visibility;
+an unlisted video is not private, and embedding depends on the video's
+YouTube settings.
+
+## Note visibility and authorization
+
+Public feed queries select only `visibility = 'public'`. Detail, video, and
+comment endpoints allow public content or match the authenticated Clerk user
+to the Note owner. Owner-only endpoints use `requireAuth()` followed by
+`syncUser` and compare `req.dbUser.id` with `notes.user_id`. Private legacy
+videos are fetched with a Clerk token in the Authorization header; credentials
+are never placed in playback URLs.
+
+## Likes and lifetime reputation
+
+Active Note and Comment likes are separate from permanent reputation awards.
+Authenticated like routes lock the public parent Note, insert the active like,
+and attempt the fixed server-defined ledger award in one transaction. Database
+primary keys and the ledger's unique award key make duplicate and concurrent
+requests idempotent. Unlike operations delete only the active-like row.
 
 ## Why not serverless-first
 
@@ -45,7 +61,7 @@ serverless as a later refactor once the rest of the stack is familiar.
 ## Deployment order (maps to ROADMAP.md Phase 3)
 
 1. RDS Postgres up, app points at it instead of local DB
-2. S3 bucket + IAM policy for presigned uploads, video storage flow works end-to-end
+2. Confirm the YouTube embed flow and legacy local playback in production
 3. Backend deployed (Elastic Beanstalk)
 4. Frontend deployed (Amplify or S3+CloudFront)
 5. Auth wired against the deployed app (Cognito or chosen alternative)
@@ -53,7 +69,7 @@ serverless as a later refactor once the rest of the stack is familiar.
 
 ## Explicitly deferred / out of scope for MVP
 
-- Video transcoding/multiple-resolution playback
+- Self-hosted video transcoding/multiple-resolution playback
 - Autoscaling tuning
 - Multi-region anything
 - Serverless API refactor
