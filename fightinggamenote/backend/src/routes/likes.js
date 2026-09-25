@@ -1,7 +1,6 @@
 import { Router } from 'express';
-import { requireAuth } from '@clerk/express';
 import { pool } from '../db/pool.js';
-import { syncUser } from '../middleware/auth.js';
+import { requireAuthenticatedUser } from '../middleware/auth.js';
 
 export const router = Router();
 
@@ -10,8 +9,7 @@ const COMMENT_LIKE_POINTS = 5;
 
 router.post(
   '/notes/:noteId/like',
-  requireAuth(),
-  syncUser,
+  requireAuthenticatedUser,
   async (req, res, next) => {
     const client = await pool.connect();
     try {
@@ -74,8 +72,7 @@ router.post(
 
 router.delete(
   '/notes/:noteId/like',
-  requireAuth(),
-  syncUser,
+  requireAuthenticatedUser,
   async (req, res, next) => {
     const client = await pool.connect();
     try {
@@ -123,8 +120,7 @@ router.delete(
 
 router.post(
   '/comments/:commentId/like',
-  requireAuth(),
-  syncUser,
+  requireAuthenticatedUser,
   async (req, res, next) => {
     const client = await pool.connect();
     try {
@@ -196,8 +192,7 @@ router.post(
 
 router.delete(
   '/comments/:commentId/like',
-  requireAuth(),
-  syncUser,
+  requireAuthenticatedUser,
   async (req, res, next) => {
     const client = await pool.connect();
     try {
@@ -250,8 +245,7 @@ router.delete(
 
 router.get(
   '/reputation/me',
-  requireAuth(),
-  syncUser,
+  requireAuthenticatedUser,
   async (req, res, next) => {
     try {
       const { rows } = await pool.query(

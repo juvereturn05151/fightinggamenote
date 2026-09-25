@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useAuth, SignedIn, SignedOut } from '@clerk/clerk-react';
+import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { api } from '../api.js';
 import LikeButton from '../components/LikeButton.jsx';
 
 export default function NoteDetail() {
   const { id } = useParams();
-  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const { getAccessToken, isAuthenticated, loading: authLoading, user } = useAuth();
   const [note, setNote] = useState(null);
   const [comments, setComments] = useState([]);
   const [commentBody, setCommentBody] = useState('');
@@ -18,23 +18,27 @@ export default function NoteDetail() {
   const [likeErrors, setLikeErrors] = useState({});
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (authLoading) return;
     setLoadError('');
-    api.getNote(id, getToken).then(setNote).catch((error) => {
+    api.getNote(id, isAuthenticated ? getAccessToken : undefined).then(setNote).catch((error) => {
       setLoadError(error.message || 'Could not load note');
     });
     refreshComments();
-  }, [getToken, id, isLoaded, userId]);
+  }, [authLoading, getAccessToken, id, isAuthenticated, user?.id]);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    api.listVideos(id, getToken).then(setVideos).catch((error) => {
+    if (authLoading) return;
+    api.listVideos(id, isAuthenticated ? getAccessToken : undefined).then(setVideos).catch((error) => {
       setLoadError(error.message || 'Could not load videos');
     });
-  }, [getToken, id, isLoaded, userId]);
+  }, [authLoading, getAccessToken, id, isAuthenticated, user?.id]);
 
   function refreshComments() {
-    api.listComments('note', id, getToken).then(setComments).catch((error) => {
+    api.listComments(
+      'note',
+      id,
+      isAuthenticated ? getAccessToken : undefined
+    ).then(setComments).catch((error) => {
       setLoadError(error.message || 'Could not load comments');
     });
   }
@@ -44,7 +48,7 @@ export default function NoteDetail() {
     if (!commentBody.trim()) return;
     await api.createComment(
       { commentable_type: 'note', commentable_id: id, body: commentBody },
-      getToken
+      getAccessToken
     );
     setCommentBody('');
     refreshComments();
@@ -61,7 +65,7 @@ export default function NoteDetail() {
       const updatedNote = await api.updateNoteVisibility(
         id,
         visibility,
-        getToken
+        getAccessToken
       );
       setNote((currentNote) => ({
         ...currentNote,
@@ -79,15 +83,15 @@ export default function NoteDetail() {
   }
 
   async function toggleNoteLike() {
-    if (!isSignedIn || note.is_owner || busyLikeKey) return;
+    if (!isAuthenticated || note.is_owner || busyLikeKey) return;
     const key = `note:${note.id}`;
     setBusyLikeKey(key);
     setLikeErrors((current) => ({ ...current, [key]: '' }));
 
     try {
       const result = note.liked_by_current_user
-        ? await api.unlikeNote(note.id, getToken)
-        : await api.likeNote(note.id, getToken);
+        ? await api.unlikeNote(note.id, getAccessToken)
+        : await api.likeNote(note.id, getAccessToken);
       setNote((currentNote) => ({ ...currentNote, ...result }));
     } catch (error) {
       setLikeErrors((current) => ({
@@ -100,15 +104,15 @@ export default function NoteDetail() {
   }
 
   async function toggleCommentLike(comment) {
-    if (!isSignedIn || comment.is_owner || busyLikeKey) return;
+    if (!isAuthenticated || comment.is_owner || busyLikeKey) return;
     const key = `comment:${comment.id}`;
     setBusyLikeKey(key);
     setLikeErrors((current) => ({ ...current, [key]: '' }));
 
     try {
       const result = comment.liked_by_current_user
-        ? await api.unlikeComment(comment.id, getToken)
-        : await api.likeComment(comment.id, getToken);
+        ? await api.unlikeComment(comment.id, getAccessToken)
+        : await api.likeComment(comment.id, getAccessToken);
       setComments((currentComments) =>
         currentComments.map((currentComment) =>
           currentComment.id === comment.id
@@ -137,7 +141,7 @@ export default function NoteDetail() {
           <LikeButton
             count={comment.like_count}
             liked={comment.liked_by_current_user}
-            isSignedIn={isSignedIn}
+            isAuthenticated={isAuthenticated}
             isOwner={comment.is_owner}
             busy={busyLikeKey === key}
             error={likeErrors[key]}
@@ -195,7 +199,7 @@ export default function NoteDetail() {
         <LikeButton
           count={note.like_count}
           liked={note.liked_by_current_user}
-          isSignedIn={isSignedIn}
+          isAuthenticated={isAuthenticated}
           isOwner={note.is_owner}
           busy={busyLikeKey === `note:${note.id}`}
           error={likeErrors[`note:${note.id}`]}
@@ -221,7 +225,7 @@ export default function NoteDetail() {
                 <LegacyVideoPlayer
                   videoId={video.id}
                   isPrivate={note.visibility === 'private'}
-                  getToken={getToken}
+                  getAccessToken={getAccessToken}
                 />
               </>
             )}
@@ -235,7 +239,7 @@ export default function NoteDetail() {
 
         {topLevel.map((comment) => renderComment(comment))}
 
-        <SignedIn>
+        {isAuthenticated ? (
           <form onSubmit={submitComment} className="comment-form">
             <input
               type="text"
@@ -245,16 +249,15 @@ export default function NoteDetail() {
             />
             <button type="submit">Post</button>
           </form>
-        </SignedIn>
-        <SignedOut>
-          <p className="subtitle">Sign in to comment.</p>
-        </SignedOut>
+        ) : (
+          <p className="subtitle"><Link to="/auth">Sign in</Link> to comment.</p>
+        )}
       </div>
     </div>
   );
 }
 
-function LegacyVideoPlayer({ videoId, isPrivate, getToken }) {
+function LegacyVideoPlayer({ videoId, isPrivate, getAccessToken }) {
   const publicUrl = `${
     import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
   }/videos/${videoId}/stream`;
@@ -273,7 +276,7 @@ function LegacyVideoPlayer({ videoId, isPrivate, getToken }) {
     setError('');
 
     api
-      .getLegacyVideoBlob(videoId, getToken)
+      .getLegacyVideoBlob(videoId, getAccessToken)
       .then((blob) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
@@ -289,7 +292,7 @@ function LegacyVideoPlayer({ videoId, isPrivate, getToken }) {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [getToken, isPrivate, videoId]);
+  }, [getAccessToken, isPrivate, videoId]);
 
   if (error) return <p className="error">{error}</p>;
   if (isPrivate && !privateUrl) return <p className="subtitle">Loading video…</p>;

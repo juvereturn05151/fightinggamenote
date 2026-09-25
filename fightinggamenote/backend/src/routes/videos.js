@@ -1,8 +1,10 @@
 
 import { Router } from 'express';
-import { getAuth, requireAuth } from '@clerk/express';
 import { pool } from '../db/pool.js';
-import { syncUser } from '../middleware/auth.js';
+import {
+  optionalAuthenticatedUser,
+  requireAuthenticatedUser,
+} from '../middleware/auth.js';
 import { upload, uploadDir } from '../middleware/upload.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -18,9 +20,8 @@ const VIDEO_TYPES = {
 
 // Public-note metadata is available to everyone. Private-note metadata is
 // available only to the signed-in note owner.
-router.get('/notes/:noteId/videos', async (req, res, next) => {
+router.get('/notes/:noteId/videos', optionalAuthenticatedUser, async (req, res, next) => {
   try {
-    const { userId: clerkUserId } = getAuth(req);
     const { rows } = await pool.query(
       `SELECT
          videos.id,
@@ -33,15 +34,10 @@ router.get('/notes/:noteId/videos', async (req, res, next) => {
        WHERE videos.note_id = $1
          AND (
            notes.visibility = 'public'
-           OR EXISTS (
-             SELECT 1
-             FROM users note_owner
-             WHERE note_owner.id = notes.user_id
-               AND note_owner.clerk_user_id = $2
-           )
+           OR notes.user_id = $2
          )
        ORDER BY videos.created_at ASC`,
-      [req.params.noteId, clerkUserId ?? null]
+      [req.params.noteId, req.dbUser?.id ?? null]
     );
 
     res.json(rows);
@@ -55,8 +51,7 @@ router.get('/notes/:noteId/videos', async (req, res, next) => {
 // or markup reaches the database.
 router.post(
   '/notes/:noteId/youtube-videos',
-  requireAuth(),
-  syncUser,
+  requireAuthenticatedUser,
   async (req, res, next) => {
     try {
       let youtubeVideoId;
@@ -92,22 +87,20 @@ router.post(
 );
 
 // Serve a video belonging to a public note or to the signed-in owner of a
-// private note. Private playback sends Clerk auth in a request header.
+// private note. Private playback sends either provider's bearer token.
 // Supports HTTP range requests so browsers can seek within videos.
-router.get('/videos/:videoId/stream', async (req, res, next) => {
+router.get('/videos/:videoId/stream', optionalAuthenticatedUser, async (req, res, next) => {
   try {
-    const { userId: clerkUserId } = getAuth(req);
     const { rows } = await pool.query(
       `SELECT videos.storage_key
        FROM videos
        JOIN notes ON notes.id = videos.note_id
-       JOIN users note_owner ON note_owner.id = notes.user_id
        WHERE videos.id = $1
          AND (
            notes.visibility = 'public'
-           OR note_owner.clerk_user_id = $2
+           OR notes.user_id = $2
          )`,
-      [req.params.videoId, clerkUserId ?? null]
+      [req.params.videoId, req.dbUser?.id ?? null]
     );
 
     if (rows.length === 0 || !rows[0].storage_key) {
@@ -225,8 +218,7 @@ router.get('/videos/:videoId/stream', async (req, res, next) => {
 // Upload a video only to a note owned by the signed-in user.
 router.post(
   '/notes/:noteId/videos',
-  requireAuth(),
-  syncUser,
+  requireAuthenticatedUser,
   async (req, res, next) => {
     try {
       const { rows } = await pool.query(

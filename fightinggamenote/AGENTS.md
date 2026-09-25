@@ -26,20 +26,20 @@ piece), not just technical fit.
 
 - Frontend: React (Vite)
 - Backend: Node.js + Express — decided
-- Auth: Clerk (`@clerk/express` on backend, `@clerk/clerk-react` on
-  frontend) — decided
+- Auth: Supabase Auth on the frontend; the backend temporarily supports both
+  Supabase and Clerk during migration
 - DB: PostgreSQL, local via Docker Compose in Phase 1/2, RDS in Phase 3
 - Video storage: S3 via presigned URLs (never proxy video bytes through
   the app server) — not yet implemented, Phase 2/3
 
 ## Auth pattern already established
 
-The `users` table is keyed by `clerk_user_id`. `middleware/auth.js`
-(`syncUser`) upserts a local `users` row on each authenticated request
-and attaches it as `req.dbUser`, so route handlers join against
-`req.dbUser.id` like a normal FK — they never call out to Clerk
-directly. Follow this pattern for any new authenticated route rather
-than re-deriving user identity a different way.
+`middleware/auth.js` verifies the provider token, resolves a distinct local
+`users` row through `supabase_user_id` or the temporary `clerk_user_id` path,
+and attaches it as `req.dbUser`. Route handlers join against `req.dbUser.id`
+like a normal FK and never call either auth provider directly. Do not link
+Supabase and Clerk identities by email. Follow this middleware pattern for any
+new authenticated route rather than re-deriving user identity.
 
 ## Conventions
 

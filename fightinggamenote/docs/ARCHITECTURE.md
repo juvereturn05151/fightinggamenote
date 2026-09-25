@@ -12,7 +12,7 @@ added, not for minimizing services touched.
 | Video hosting       | YouTube                                    | New replays are attached by URL; only the validated video ID is stored |
 | Video delivery      | YouTube embed player                       | Embed URL is constructed by the frontend from the stored ID |
 | Legacy video storage | Local disk                                | Existing uploads and streaming route remain available during transition |
-| Auth                | Clerk                                      | Backend uses `requireAuth()` then `syncUser` for authenticated writes |
+| Auth                | Supabase Auth (frontend), Clerk compatibility (backend only) | Backend verifies Supabase access tokens and temporarily continues to accept Clerk tokens during migration |
 | Backend hosting     | Elastic Beanstalk (MVP), ECS Fargate (later if wanted) | EB is the gentler on-ramp |
 | Frontend hosting    | Amplify Hosting, or S3 + CloudFront directly | Amplify wraps the S3+CloudFront setup |
 | IAM                 | Scoped role/policy for presigned S3 uploads | Backend generates presigned URLs, never routes video bytes through the app server |
@@ -36,11 +36,13 @@ YouTube settings.
 ## Note visibility and authorization
 
 Public feed queries select only `visibility = 'public'`. Detail, video, and
-comment endpoints allow public content or match the authenticated Clerk user
-to the Note owner. Owner-only endpoints use `requireAuth()` followed by
-`syncUser` and compare `req.dbUser.id` with `notes.user_id`. Private legacy
-videos are fetched with a Clerk token in the Authorization header; credentials
-are never placed in playback URLs.
+comment endpoints allow public content or match the authenticated local user
+to the Note owner. Auth middleware verifies Supabase tokens first and retains
+Clerk verification as temporary backend compatibility; both paths attach a
+local user as `req.dbUser`. Owner-only endpoints compare `req.dbUser.id` with
+`notes.user_id`. Private legacy videos are fetched with the Supabase access
+token in the Authorization header; credentials are never placed in playback
+URLs.
 
 ## Likes and lifetime reputation
 
@@ -64,7 +66,7 @@ serverless as a later refactor once the rest of the stack is familiar.
 2. Confirm the YouTube embed flow and legacy local playback in production
 3. Backend deployed (Elastic Beanstalk)
 4. Frontend deployed (Amplify or S3+CloudFront)
-5. Auth wired against the deployed app (Cognito or chosen alternative)
+5. Supabase Auth configured for the deployed frontend and backend
 6. CloudFront in front of S3 for playback
 
 ## Explicitly deferred / out of scope for MVP

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { api } from '../api.js';
 import LikeButton from '../components/LikeButton.jsx';
 
 export default function Feed() {
-  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const { getAccessToken, isAuthenticated, loading: authLoading, user } = useAuth();
   const [games, setGames] = useState([]);
   const [characters, setCharacters] = useState([]);
   const [selectedGame, setSelectedGame] = useState(null);
@@ -29,26 +29,33 @@ export default function Feed() {
   }, [selectedGame]);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (authLoading) return;
     setLoading(true);
     api
       .listNotes({
         game: selectedGame?.slug,
         character: selectedCharacter?.slug,
-      }, getToken)
+      }, isAuthenticated ? getAccessToken : undefined)
       .then(setNotes)
       .finally(() => setLoading(false));
-  }, [getToken, isLoaded, selectedGame, selectedCharacter, userId]);
+  }, [
+    authLoading,
+    getAccessToken,
+    isAuthenticated,
+    selectedGame,
+    selectedCharacter,
+    user?.id,
+  ]);
 
   async function toggleNoteLike(note) {
-    if (!isSignedIn || note.is_owner || busyNoteId) return;
+    if (!isAuthenticated || note.is_owner || busyNoteId) return;
     setBusyNoteId(note.id);
     setLikeErrors((current) => ({ ...current, [note.id]: '' }));
 
     try {
       const result = note.liked_by_current_user
-        ? await api.unlikeNote(note.id, getToken)
-        : await api.likeNote(note.id, getToken);
+        ? await api.unlikeNote(note.id, getAccessToken)
+        : await api.likeNote(note.id, getAccessToken);
       setNotes((currentNotes) =>
         currentNotes.map((currentNote) =>
           currentNote.id === note.id ? { ...currentNote, ...result } : currentNote
@@ -137,7 +144,7 @@ export default function Feed() {
             <LikeButton
               count={note.like_count}
               liked={note.liked_by_current_user}
-              isSignedIn={isSignedIn}
+              isAuthenticated={isAuthenticated}
               isOwner={note.is_owner}
               busy={busyNoteId === note.id}
               error={likeErrors[note.id]}

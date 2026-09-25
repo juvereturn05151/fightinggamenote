@@ -23,7 +23,8 @@ legacy local-video playback. See `docs/ROADMAP.md` for the current checklist.
 - Frontend: React (Vite) — `frontend/`
 - Backend: Node.js + Express — `backend/`
 - Database: PostgreSQL (Docker locally, RDS in Phase 3)
-- Auth: Clerk
+- Auth: Supabase Auth in the frontend; the backend temporarily accepts both
+  Supabase and Clerk access tokens during migration
 
 ## Getting started (local dev)
 
@@ -39,8 +40,7 @@ docker compose up -d
 cd backend
 npm install
 cp .env.example .env
-# edit .env — fill in CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY from
-# https://dashboard.clerk.com (API Keys section)
+# edit .env — configure Supabase and the temporary Clerk compatibility values
 
 npm run migrate   # applies migrations/*.sql, including starter seed data
 npm run dev        # starts on :3001
@@ -52,14 +52,14 @@ npm run dev        # starts on :3001
 cd frontend
 npm install
 cp .env.example .env
-# edit .env — fill in VITE_CLERK_PUBLISHABLE_KEY (same Clerk project,
-# publishable key)
+# edit .env — fill in VITE_API_URL, VITE_SUPABASE_URL, and the Supabase
+# publishable key (never use a service-role key in the frontend)
 
 npm run dev         # starts on :5173
 ```
 
 Visit http://localhost:5173. You should see the seeded Street Fighter 6
-roster in the sidebar and be able to sign in (Clerk), post a note, and
+roster in the sidebar and be able to sign in (Supabase), post a note, and
 comment.
 
 ## What's not built yet
@@ -77,7 +77,7 @@ backend/
     index.js           Express app entrypoint
     db/pool.js          Postgres connection pool
     db/migrate.js       minimal migration runner
-    middleware/auth.js  Clerk verification + local user sync
+    middleware/auth.js  Supabase/Clerk verification + local user sync
     routes/              games, notes, comments
   migrations/            *.sql files, applied in filename order
 frontend/

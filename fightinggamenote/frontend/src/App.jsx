@@ -1,16 +1,14 @@
 import { Routes, Route, Link } from 'react-router-dom';
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  UserButton,
-} from '@clerk/clerk-react';
+import { useAuth } from './auth/AuthContext.jsx';
 import Feed from './pages/Feed.jsx';
 import NoteDetail from './pages/NoteDetail.jsx';
 import CreateNote from './pages/CreateNote.jsx';
 import MyNotes from './pages/MyNotes.jsx';
+import Auth from './pages/Auth.jsx';
 
 export default function App() {
+  const { isAuthenticated, loading, signOut, user } = useAuth();
+
   return (
     <div className="app">
       <header className="topbar">
@@ -19,14 +17,17 @@ export default function App() {
         </Link>
         <nav>
           <Link to="/">Public Feed</Link>
-          <SignedOut>
-            <SignInButton mode="modal" />
-          </SignedOut>
-          <SignedIn>
-            <Link to="/my-notes">My Notes</Link>
-            <Link to="/notes/new">New note</Link>
-            <UserButton />
-          </SignedIn>
+          {!loading && !isAuthenticated && <Link to="/auth">Sign in</Link>}
+          {!loading && isAuthenticated && (
+            <>
+              <Link to="/my-notes">My Notes</Link>
+              <Link to="/notes/new">New note</Link>
+              <span className="nav-email" title={user.email}>{user.email}</span>
+              <button className="text-button" type="button" onClick={signOut}>
+                Sign out
+              </button>
+            </>
+          )}
         </nav>
       </header>
 
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/my-notes" element={<MyNotes />} />
           <Route path="/notes/new" element={<CreateNote />} />
           <Route path="/notes/:id" element={<NoteDetail />} />
+          <Route path="/auth" element={<Auth />} />
         </Routes>
       </main>
     </div>

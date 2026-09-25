@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@clerk/clerk-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { api } from '../api.js';
 
 export default function CreateNote() {
-  const { getToken } = useAuth();
+  const { getAccessToken, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [games, setGames] = useState([]);
   const [characters, setCharacters] = useState([]);
@@ -21,8 +22,9 @@ export default function CreateNote() {
   const [createdNoteId, setCreatedNoteId] = useState(null);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     api.listGames().then(setGames);
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const game = games.find((g) => g.id === gameId);
@@ -71,7 +73,7 @@ export default function CreateNote() {
               .filter(Boolean),
             visibility,
           },
-          getToken
+          getAccessToken
         );
         noteId = createdNote.id;
         setCreatedNoteId(noteId);
@@ -79,7 +81,11 @@ export default function CreateNote() {
 
       if (normalizedYouTubeUrl) {
         try {
-          await api.attachYouTubeVideo(noteId, normalizedYouTubeUrl, getToken);
+          await api.attachYouTubeVideo(
+            noteId,
+            normalizedYouTubeUrl,
+            getAccessToken
+          );
         } catch (attachError) {
           setError(
             `Your note was created, but the YouTube replay was not attached: ${attachError.message}. You can correct the URL and retry without creating another note.`
@@ -94,6 +100,19 @@ export default function CreateNote() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (loading) return <p className="page-message">Loading session…</p>;
+
+  if (!isAuthenticated) {
+    return (
+      <div className="page-message">
+        <p>Sign in to create a note.</p>
+        <Link to="/auth" state={{ from: location.pathname }}>
+          Sign in
+        </Link>
+      </div>
+    );
   }
 
   return (

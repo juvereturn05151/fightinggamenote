@@ -1,14 +1,14 @@
 export default function LikeButton({
   count = 0,
   liked = false,
-  isSignedIn,
+  isAuthenticated,
   isOwner,
   busy,
   onToggle,
   error,
 }) {
-  const disabled = !isSignedIn || isOwner || busy;
-  const title = !isSignedIn
+  const disabled = !isAuthenticated || isOwner || busy;
+  const title = !isAuthenticated
     ? 'Sign in to like'
     : isOwner
       ? 'You cannot like your own content'

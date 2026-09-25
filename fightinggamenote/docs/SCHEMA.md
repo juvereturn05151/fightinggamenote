@@ -7,13 +7,23 @@ migrations in sync.
 
 ### User
 ```
-id                uuid PK
-username          text unique
-email             text unique
-password_hash     text        -- or external auth provider id
-avatar_url        text
-created_at        timestamptz
+id                 uuid PK
+clerk_user_id      text unique, nullable
+supabase_user_id   uuid unique, nullable
+username           text unique
+email              text unique
+avatar_url         text
+created_at         timestamptz
 ```
+
+`id` is the application's stable internal user identity and remains the target
+of ownership foreign keys. Authentication-provider identities are stored
+separately: `clerk_user_id` preserves existing local Clerk accounts, while
+`supabase_user_id` can identify accounts authenticated by Supabase. Each is
+nullable to support the transition, but the `users_auth_identity_check`
+constraint requires every User to have at least one of them. Both identity
+columns are unique when present. Accounts are not linked automatically by
+email.
 
 ### Game
 ```

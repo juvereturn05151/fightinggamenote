@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { SignInButton, useAuth } from '@clerk/clerk-react';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { api } from '../api.js';
 
 export default function MyNotes() {
-  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  const { getAccessToken, isAuthenticated, loading: authLoading, user } = useAuth();
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -15,15 +15,18 @@ export default function MyNotes() {
   });
 
   useEffect(() => {
-    if (!isLoaded) return;
-    if (!isSignedIn) {
+    if (authLoading) return;
+    if (!isAuthenticated) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
     setError('');
-    Promise.all([api.listMyNotes(getToken), api.getMyReputation(getToken)])
+    Promise.all([
+      api.listMyNotes(getAccessToken),
+      api.getMyReputation(getAccessToken),
+    ])
       .then(([myNotes, reputationTotals]) => {
         setNotes(myNotes);
         setReputation(reputationTotals);
@@ -32,15 +35,15 @@ export default function MyNotes() {
         setError(requestError.message || 'Could not load your notes');
       })
       .finally(() => setLoading(false));
-  }, [getToken, isLoaded, isSignedIn, userId]);
+  }, [authLoading, getAccessToken, isAuthenticated, user?.id]);
 
-  if (!isLoaded || loading) return <p className="page-message">Loading…</p>;
+  if (authLoading || loading) return <p className="page-message">Loading…</p>;
 
-  if (!isSignedIn) {
+  if (!isAuthenticated) {
     return (
       <div className="page-message">
         <p>Sign in to view your notes.</p>
-        <SignInButton mode="modal" />
+        <Link to="/auth" state={{ from: '/my-notes' }}>Sign in</Link>
       </div>
     );
   }

@@ -1,11 +1,11 @@
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
-// getToken is Clerk's session token getter, passed in from the calling
-// component via useAuth(). Pass null for unauthenticated GETs.
-async function request(path, { method = 'GET', body, getToken } = {}) {
+// Pass getAccessToken for authenticated or personalized requests. Public
+// endpoints remain usable without it.
+async function request(path, { method = 'GET', body, getAccessToken } = {}) {
   const headers = { 'Content-Type': 'application/json' };
-  if (getToken) {
-    const token = await getToken();
+  if (getAccessToken) {
+    const token = await getAccessToken();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
@@ -17,14 +17,16 @@ async function request(path, { method = 'GET', body, getToken } = {}) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error ?? 'Request failed');
+    const error = new Error(err.error ?? 'Request failed');
+    error.status = res.status;
+    throw error;
   }
   if (res.status === 204) return null;
   return res.json();
 }
 
-async function uploadVideo(noteId, file, getToken) {
-  const token = await getToken();
+async function uploadVideo(noteId, file, getAccessToken) {
+  const token = await getAccessToken();
   const formData = new FormData();
   formData.append('video', file);
 
@@ -44,8 +46,8 @@ async function uploadVideo(noteId, file, getToken) {
   return res.json();
 }
 
-async function getLegacyVideoBlob(videoId, getToken) {
-  const token = await getToken();
+async function getLegacyVideoBlob(videoId, getAccessToken) {
+  const token = await getAccessToken();
   const res = await fetch(`${API_URL}/videos/${videoId}/stream`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
@@ -62,45 +64,48 @@ export const api = {
   listGames: () => request('/games'),
   listCharacters: (gameSlug) => request(`/games/${gameSlug}/characters`),
 
-  listNotes: ({ game, character } = {}, getToken) => {
+  listNotes: ({ game, character } = {}, getAccessToken) => {
     const params = new URLSearchParams();
     if (game) params.set('game', game);
     if (character) params.set('character', character);
     const qs = params.toString();
-    return request(`/notes${qs ? `?${qs}` : ''}`, { getToken });
+    return request(`/notes${qs ? `?${qs}` : ''}`, { getAccessToken });
   },
-  getNote: (id, getToken) => request(`/notes/${id}`, { getToken }),
-  listMyNotes: (getToken) => request('/notes/mine', { getToken }),
-  createNote: (note, getToken) =>
-    request('/notes', { method: 'POST', body: note, getToken }),
-  updateNoteVisibility: (noteId, visibility, getToken) =>
+  getNote: (id, getAccessToken) =>
+    request(`/notes/${id}`, { getAccessToken }),
+  listMyNotes: (getAccessToken) =>
+    request('/notes/mine', { getAccessToken }),
+  createNote: (note, getAccessToken) =>
+    request('/notes', { method: 'POST', body: note, getAccessToken }),
+  updateNoteVisibility: (noteId, visibility, getAccessToken) =>
     request(`/notes/${noteId}`, {
       method: 'PATCH',
       body: { visibility },
-      getToken,
+      getAccessToken,
     }),
 
-  listComments: (type, id, getToken) =>
-    request(`/comments?type=${type}&id=${id}`, { getToken }),
-  createComment: (comment, getToken) =>
-    request('/comments', { method: 'POST', body: comment, getToken }),
-  likeNote: (noteId, getToken) =>
-    request(`/notes/${noteId}/like`, { method: 'POST', getToken }),
-  unlikeNote: (noteId, getToken) =>
-    request(`/notes/${noteId}/like`, { method: 'DELETE', getToken }),
-  likeComment: (commentId, getToken) =>
-    request(`/comments/${commentId}/like`, { method: 'POST', getToken }),
-  unlikeComment: (commentId, getToken) =>
-    request(`/comments/${commentId}/like`, { method: 'DELETE', getToken }),
-  getMyReputation: (getToken) => request('/reputation/me', { getToken }),
+  listComments: (type, id, getAccessToken) =>
+    request(`/comments?type=${type}&id=${id}`, { getAccessToken }),
+  createComment: (comment, getAccessToken) =>
+    request('/comments', { method: 'POST', body: comment, getAccessToken }),
+  likeNote: (noteId, getAccessToken) =>
+    request(`/notes/${noteId}/like`, { method: 'POST', getAccessToken }),
+  unlikeNote: (noteId, getAccessToken) =>
+    request(`/notes/${noteId}/like`, { method: 'DELETE', getAccessToken }),
+  likeComment: (commentId, getAccessToken) =>
+    request(`/comments/${commentId}/like`, { method: 'POST', getAccessToken }),
+  unlikeComment: (commentId, getAccessToken) =>
+    request(`/comments/${commentId}/like`, { method: 'DELETE', getAccessToken }),
+  getMyReputation: (getAccessToken) =>
+    request('/reputation/me', { getAccessToken }),
   uploadVideo,
-  attachYouTubeVideo: (noteId, youtubeUrl, getToken) =>
+  attachYouTubeVideo: (noteId, youtubeUrl, getAccessToken) =>
     request(`/notes/${noteId}/youtube-videos`, {
       method: 'POST',
       body: { youtube_url: youtubeUrl },
-      getToken,
+      getAccessToken,
     }),
-  listVideos: (noteId, getToken) =>
-    request(`/notes/${noteId}/videos`, { getToken }),
+  listVideos: (noteId, getAccessToken) =>
+    request(`/notes/${noteId}/videos`, { getAccessToken }),
   getLegacyVideoBlob,
 };

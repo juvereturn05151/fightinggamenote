@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import { getAuth, requireAuth } from '@clerk/express';
 import { pool } from '../db/pool.js';
-import { syncUser } from '../middleware/auth.js';
+import {
+  optionalAuthenticatedUser,
+  requireAuthenticatedUser,
+} from '../middleware/auth.js';
 import {
   DEFAULT_NOTE_VISIBILITY,
   isNoteVisibility,
 } from '../noteVisibility.js';
-
-export const router = Router();
 
 const noteSelect = (extraFields = '') => `
   SELECT
@@ -23,12 +23,13 @@ const noteSelect = (extraFields = '') => `
   JOIN characters ON characters.id = notes.character_id
 `;
 
+export const router = Router();
+
 // GET /notes?game=sf6&character=ken — list, filterable
-router.get('/', async (req, res) => {
+router.get('/', optionalAuthenticatedUser, async (req, res) => {
   const { game, character } = req.query;
-  const { userId: clerkUserId } = getAuth(req);
   const conditions = ["notes.visibility = 'public'"];
-  const params = [clerkUserId ?? null];
+  const params = [req.dbUser?.id ?? null];
 
   if (game) {
     params.push(game);
@@ -45,11 +46,10 @@ router.get('/', async (req, res) => {
       EXISTS (
         SELECT 1
         FROM note_likes
-        JOIN users liking_user ON liking_user.id = note_likes.user_id
         WHERE note_likes.note_id = notes.id
-          AND liking_user.clerk_user_id = $1
+          AND note_likes.user_id = $1
       ) AS liked_by_current_user,
-      COALESCE(users.clerk_user_id = $1, FALSE) AS is_owner
+      COALESCE(users.id = $1, FALSE) AS is_owner
     `)} WHERE ${conditions.join(' AND ')} ORDER BY notes.created_at DESC`,
     params
   );
@@ -57,7 +57,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /notes/mine — every note owned by the signed-in user.
-router.get('/mine', requireAuth(), syncUser, async (req, res, next) => {
+router.get('/mine', requireAuthenticatedUser, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `${noteSelect(`,
@@ -75,34 +75,36 @@ router.get('/mine', requireAuth(), syncUser, async (req, res, next) => {
   }
 });
 
+export function createGetNoteHandler(db = pool) {
+  return async (req, res) => {
+    const { rows } = await db.query(
+      `${noteSelect(`,
+        COALESCE(users.id = $2, FALSE) AS is_owner,
+        (SELECT count(*)::int FROM note_likes WHERE note_id = notes.id) AS like_count,
+        EXISTS (
+          SELECT 1
+          FROM note_likes
+          WHERE note_likes.note_id = notes.id
+            AND note_likes.user_id = $2
+        ) AS liked_by_current_user
+      `)}
+       WHERE notes.id = $1
+         AND (
+           notes.visibility = 'public'
+           OR notes.user_id = $2
+         )`,
+      [req.params.id, req.dbUser?.id ?? null]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    return res.json(rows[0]);
+  };
+}
+
 // GET /notes/:id — single note
-router.get('/:id', async (req, res) => {
-  const { userId: clerkUserId } = getAuth(req);
-  const { rows } = await pool.query(
-    `${noteSelect(`,
-      COALESCE(users.clerk_user_id = $2, FALSE) AS is_owner,
-      (SELECT count(*)::int FROM note_likes WHERE note_id = notes.id) AS like_count,
-      EXISTS (
-        SELECT 1
-        FROM note_likes
-        JOIN users liking_user ON liking_user.id = note_likes.user_id
-        WHERE note_likes.note_id = notes.id
-          AND liking_user.clerk_user_id = $2
-      ) AS liked_by_current_user
-    `)}
-     WHERE notes.id = $1
-       AND (
-         notes.visibility = 'public'
-         OR users.clerk_user_id = $2
-       )`,
-    [req.params.id, clerkUserId ?? null]
-  );
-  if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-  res.json(rows[0]);
-});
+router.get('/:id', optionalAuthenticatedUser, createGetNoteHandler());
 
 // POST /notes — create
-router.post('/', requireAuth(), syncUser, async (req, res) => {
+router.post('/', requireAuthenticatedUser, async (req, res) => {
   const { game_id, character_id, title, body, tags, visibility } = req.body;
   const normalizedVisibility = visibility ?? DEFAULT_NOTE_VISIBILITY;
 
@@ -148,7 +150,7 @@ router.post('/', requireAuth(), syncUser, async (req, res) => {
 });
 
 // PATCH /notes/:id — update (author only)
-router.patch('/:id', requireAuth(), syncUser, async (req, res) => {
+router.patch('/:id', requireAuthenticatedUser, async (req, res) => {
   const { title, body, tags, visibility } = req.body;
 
   if (visibility !== undefined && !isNoteVisibility(visibility)) {
@@ -178,7 +180,7 @@ router.patch('/:id', requireAuth(), syncUser, async (req, res) => {
 });
 
 // DELETE /notes/:id — author only
-router.delete('/:id', requireAuth(), syncUser, async (req, res) => {
+router.delete('/:id', requireAuthenticatedUser, async (req, res) => {
   const { rowCount } = await pool.query(
     'DELETE FROM notes WHERE id = $1 AND user_id = $2',
     [req.params.id, req.dbUser.id]
